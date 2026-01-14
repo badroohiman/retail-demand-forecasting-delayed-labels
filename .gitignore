@@ -242,3 +242,5 @@ cdk.out/
 terraform.tfstate
 terraform.tfstate.*
 .terraform/
+.kaggle/
+kaggle.json
