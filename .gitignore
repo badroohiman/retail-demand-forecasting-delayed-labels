@@ -137,7 +137,7 @@ celerybeat.pid
 # Environments
 .env
 .envrc
-.venv
+.venv/
 env/
 venv/
 ENV/
@@ -205,3 +205,40 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# --- Data Science project-specific ---
+data/
+raw/
+processed/
+features/
+artifacts/
+models/
+reports/*.pdf
+reports/*.html
+
+# Common data formats (keep small sample data only if you want)
+*.parquet
+*.feather
+*.csv
+*.tsv
+
+# Model artifacts
+*.pkl
+*.joblib
+*.onnx
+*.h5
+*.keras
+
+# Secrets / credentials
+*.pem
+*.key
+*.crt
+.env.*
+
+# AWS / IaC local state
+.aws/
+cdk.out/
+.sam/
+terraform.tfstate
+terraform.tfstate.*
+.terraform/
