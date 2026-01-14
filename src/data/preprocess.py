@@ -96,7 +96,6 @@ def main() -> None:
     sales_wide, calendar, prices = load_raw(unzipped_dir)
     sales_long = to_long_sales(sales_wide)
     df = build_canonical_table(sales_long, calendar, prices)
-    df = basic_clean(df)
 
     # Keep a sensible subset of columns (you can expand later)
     keep_cols = [
