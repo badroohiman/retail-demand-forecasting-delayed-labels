@@ -4,7 +4,7 @@ import subprocess
 import zipfile
 from pathlib import Path
 
-DEFAULT_DATASET = "m5-forecasting-accuracy"   # competition name
+DEFAULT_DATASET = "m5-forecasting-accuracy"  # competition name
 DEFAULT_OUTDIR = "data/raw/m5"
 
 
@@ -91,13 +91,17 @@ def unzip_m5(zip_path: Path, outdir: Path, force: bool = False) -> Path:
         zf.extractall(target_dir)
 
     files = list(target_dir.glob("*"))
-    print(f"[OK] Unzipped {len(files)} top-level files. Example: {[f.name for f in files[:5]]}")
+    print(
+        f"[OK] Unzipped {len(files)} top-level files. Example: {[f.name for f in files[:5]]}"
+    )
 
     return target_dir
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Download and unzip the M5 dataset from Kaggle.")
+    parser = argparse.ArgumentParser(
+        description="Download and unzip the M5 dataset from Kaggle."
+    )
     parser.add_argument("--dataset", type=str, default=DEFAULT_DATASET)
     parser.add_argument("--outdir", type=str, default=DEFAULT_OUTDIR)
     parser.add_argument("--force", action="store_true")

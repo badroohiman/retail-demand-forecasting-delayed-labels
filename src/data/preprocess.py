@@ -23,7 +23,9 @@ def load_raw(unzipped_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
         sales_path = sales_evaluation
         variant = "evaluation"
     else:
-        raise FileNotFoundError("Could not find sales_train_validation.csv or sales_train_evaluation.csv")
+        raise FileNotFoundError(
+            "Could not find sales_train_validation.csv or sales_train_evaluation.csv"
+        )
 
     if not calendar_path.exists():
         raise FileNotFoundError(f"Missing {calendar_path}")
@@ -39,7 +41,9 @@ def load_raw(unzipped_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
     return sales, calendar, prices
 
 
-def to_long_sales(sales_wide: pd.DataFrame, sample_stores: int = 0, sample_items: int = 0) -> pd.DataFrame:
+def to_long_sales(
+    sales_wide: pd.DataFrame, sample_stores: int = 0, sample_items: int = 0
+) -> pd.DataFrame:
     """
     Convert wide sales format (d_1...d_N) to long:
     id, item_id, dept_id, cat_id, store_id, state_id, d, sales
@@ -68,7 +72,9 @@ def to_long_sales(sales_wide: pd.DataFrame, sample_stores: int = 0, sample_items
     return sales_long
 
 
-def build_canonical_table(sales_long: pd.DataFrame, calendar: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
+def build_canonical_table(
+    sales_long: pd.DataFrame, calendar: pd.DataFrame, prices: pd.DataFrame
+) -> pd.DataFrame:
     """
     Join sales_long with calendar and sell_prices.
     - sales_long joins calendar on 'd'
@@ -81,18 +87,42 @@ def build_canonical_table(sales_long: pd.DataFrame, calendar: pd.DataFrame, pric
 
     # sanity check
     if df["date"].isna().any():
-        raise ValueError("Some rows have missing date after joining calendar. Check join keys.")
+        raise ValueError(
+            "Some rows have missing date after joining calendar. Check join keys."
+        )
 
     df = df.merge(prices, how="left", on=["store_id", "item_id", "wm_yr_wk"])
     return df
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Preprocess M5 raw files into a canonical daily table (EDA-first).")
-    parser.add_argument("--unzipped_dir", type=str, default="data/raw/m5/unzipped", help="Folder with raw CSVs")
-    parser.add_argument("--out_path", type=str, default="data/processed/m5_daily_sample.parquet", help="Output parquet path")
-    parser.add_argument("--sample_stores", type=int, default=1, help="Number of stores to keep (0 = all)")
-    parser.add_argument("--sample_items", type=int, default=200, help="Number of items to keep (0 = all)")
+    parser = argparse.ArgumentParser(
+        description="Preprocess M5 raw files into a canonical daily table (EDA-first)."
+    )
+    parser.add_argument(
+        "--unzipped_dir",
+        type=str,
+        default="data/raw/m5/unzipped",
+        help="Folder with raw CSVs",
+    )
+    parser.add_argument(
+        "--out_path",
+        type=str,
+        default="data/processed/m5_daily_sample.parquet",
+        help="Output parquet path",
+    )
+    parser.add_argument(
+        "--sample_stores",
+        type=int,
+        default=1,
+        help="Number of stores to keep (0 = all)",
+    )
+    parser.add_argument(
+        "--sample_items",
+        type=int,
+        default=200,
+        help="Number of items to keep (0 = all)",
+    )
     args = parser.parse_args()
 
     unzipped_dir = Path(args.unzipped_dir)
@@ -100,7 +130,9 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     sales_wide, calendar, prices = load_raw(unzipped_dir)
-    sales_long = to_long_sales(sales_wide, sample_stores=args.sample_stores, sample_items=args.sample_items)
+    sales_long = to_long_sales(
+        sales_wide, sample_stores=args.sample_stores, sample_items=args.sample_items
+    )
     df = build_canonical_table(sales_long, calendar, prices)
 
     # Keep a sensible subset of columns (expand later during feature engineering)
@@ -124,7 +156,11 @@ def main() -> None:
         "snap_WI",
     ]
     keep_cols = [c for c in keep_cols if c in df.columns]
-    df = df[keep_cols].sort_values(["store_id", "item_id", "date"]).reset_index(drop=True)
+    df = (
+        df[keep_cols]
+        .sort_values(["store_id", "item_id", "date"])
+        .reset_index(drop=True)
+    )
 
     df.to_parquet(out_path, index=False)
     print(f"[OK] Saved: {out_path}")
