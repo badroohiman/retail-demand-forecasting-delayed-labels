@@ -46,3 +46,4 @@ test: venv
 clean:
 	rm -rf __pycache__ .pytest_cache .ruff_cache
 	find . -type d -name "__pycache__" -exec rm -rf {} +
+
