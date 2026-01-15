@@ -1,4 +1,4 @@
-git numpy
+numpy
 pandas
 pyarrow
 scikit-learn
