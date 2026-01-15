@@ -1,0 +1,6 @@
+black
+ruff
+nbqa
+pytest
+nbval
+nbstripout
