@@ -20,20 +20,41 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff black mypy pytest nbval
+          # Project deps
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Dev / quality tools
+          pip install ruff black nbqa pytest nbval
 
+      # ---------- Lint & format (code) ----------
       - name: Lint (ruff)
-        run: ruff check src
+        run: |
+          ruff check src
 
       - name: Format check (black)
-        run: black --check src
+        run: |
+          black --check src
 
-      - name: Type check (mypy)
-        run: mypy src || true
+      # ---------- Lint & format (notebooks) ----------
+      - name: Notebook format check (nbqa + black)
+        run: |
+          nbqa black --check notebooks
 
+      - name: Notebook lint (nbqa + ruff)
+        run: |
+          nbqa ruff notebooks
+
+      # ---------- Tests ----------
       - name: Unit tests
-        run: pytest -q
+        run: |
+          pytest -q
 
+      # ---------- Notebook reproducibility ----------
+      # Note: your notebooks read local parquet files that are not committed.
+      # This step will run only if the expected processed file exists.
       - name: Notebook reproducibility (nbval)
-        run: pytest -q --nbval notebooks/01_eda.ipynb
+        run: |
+          if [ -f data/processed/m5_daily_sample.parquet ]; then
+            pytest -q --nbval notebooks/01_eda.ipynb
+          else
+            echo "Skipping nbval: data/processed/m5_daily_sample.parquet not found (expected in local runs only)."
+          fi
