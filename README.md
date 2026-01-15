@@ -1,5 +1,7 @@
 # 📦 Retail Demand Forecasting with Delayed Labels
 
+[![CI](https://github.com/badroohiman/retail-demand-forecasting-delayed-labels/actions/workflows/ci.yml/badge.svg)](https://github.com/badroohiman/retail-demand-forecasting-delayed-labels/actions/workflows/ci.yml)
+
 ## Overview
 
 This project explores **retail demand forecasting** using daily item-level sales data, with a focus on **realistic production constraints** such as **delayed and revised labels**.
