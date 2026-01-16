@@ -129,3 +129,14 @@ This project focuses on **how forecasting systems behave when labels arrive late
 
 * Kaggle credentials and data are intentionally excluded.
 * The repository prioritizes **clarity, reproducibility, and decision transparency** over leaderboard optimization.
+
+### Delayed ground truth simulation (v0 / v1 / v2)
+
+Real retail systems often have delayed and revised sales reporting. To reflect this, we create three label versions:
+
+- **y_v0**: same-day label (most incomplete)
+- **y_v1**: 7-day matured label (less incomplete)
+- **y_v2**: final label (treated as ground truth)
+
+Labels are simulated by under-reporting a subset of non-zero days with a reproducible random seed.
+This allows evaluation of how reporting latency impacts model performance and operational decisions.
