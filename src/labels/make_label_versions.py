@@ -25,7 +25,9 @@ def _ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _simulate_partial(final_sales: np.ndarray, cfg: DelayConfig, rng: np.random.Generator) -> np.ndarray:
+def _simulate_partial(
+    final_sales: np.ndarray, cfg: DelayConfig, rng: np.random.Generator
+) -> np.ndarray:
     """
     Simulate under-reporting for non-zero final_sales.
     - with probability cfg.p_partial: y = floor(final_sales * u), u ~ Uniform[min_frac, 1]
@@ -80,7 +82,9 @@ def make_label_versions(df: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
 
     # Sanity checks
     if (out["y_v0"] > out["y_v2"]).any() or (out["y_v1"] > out["y_v2"]).any():
-        raise ValueError("Found delayed labels greater than final labels (should not happen).")
+        raise ValueError(
+            "Found delayed labels greater than final labels (should not happen)."
+        )
     if (out["y_v0"] < 0).any() or (out["y_v1"] < 0).any() or (out["y_v2"] < 0).any():
         raise ValueError("Found negative labels (should not happen).")
 
@@ -88,10 +92,24 @@ def make_label_versions(df: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create label delay versions v0/v1/v2 for M5 canonical data.")
-    parser.add_argument("--in_path", type=str, default="data/processed/m5_daily_sample.parquet", help="Input parquet")
-    parser.add_argument("--out_path", type=str, default="data/processed/m5_labeled_sample.parquet", help="Output parquet")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser = argparse.ArgumentParser(
+        description="Create label delay versions v0/v1/v2 for M5 canonical data."
+    )
+    parser.add_argument(
+        "--in_path",
+        type=str,
+        default="data/processed/m5_daily_sample.parquet",
+        help="Input parquet",
+    )
+    parser.add_argument(
+        "--out_path",
+        type=str,
+        default="data/processed/m5_labeled_sample.parquet",
+        help="Output parquet",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for reproducibility"
+    )
     args = parser.parse_args()
 
     in_path = Path(args.in_path)

@@ -140,3 +140,35 @@ Real retail systems often have delayed and revised sales reporting. To reflect t
 
 Labels are simulated by under-reporting a subset of non-zero days with a reproducible random seed.
 This allows evaluation of how reporting latency impacts model performance and operational decisions.
+
+### Time-aware baselines (rolling-origin backtest)
+
+We evaluate naive baselines using rolling-origin backtesting (no shuffling, no leakage).
+Baselines:
+- naive (lag-1)
+- seasonal naive (lag-7)
+- rolling mean (28-day)
+
+Results are reported for delayed label maturities `y_v0`, `y_v1`, `y_v2` to quantify the impact of reporting latency.
+
+## Time-aware baseline evaluation — results
+
+We evaluated three baseline forecasters using rolling-origin backtesting:
+- naive (lag-1)
+- seasonal naive (lag-7)
+- rolling mean (28 days)
+
+Results were compared across delayed label maturities (`y_v0`, `y_v1`, `y_v2`).
+
+### Key observations
+- Error increases as label maturity decreases (`y_v2` → `y_v1` → `y_v0`), validating the delayed-label simulation.
+- The 28-day rolling mean achieves the lowest MAE across all label versions.
+- The naive baseline achieves the lowest sMAPE due to frequent zero predictions.
+
+### Interpretation
+- Rolling averages reduce absolute error by smoothing demand but tend to over-predict on zero-sales days.
+- Relative error metrics (sMAPE) strongly penalize non-zero predictions when true demand is zero, favoring sparse predictors.
+- Metric choice materially affects model ranking in zero-inflated demand settings.
+
+### Conclusion
+These baselines establish a strong, interpretable benchmark and highlight the trade-offs between accuracy and sparsity-aware evaluation.

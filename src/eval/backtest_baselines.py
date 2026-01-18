@@ -8,9 +8,9 @@ import pandas as pd
 
 @dataclass(frozen=True)
 class BacktestConfig:
-    horizon: int = 28          # forecast horizon (days)
+    horizon: int = 28  # forecast horizon (days)
     min_train_days: int = 365  # minimum history before first test window
-    step: int = 28             # how far to move the origin each fold
+    step: int = 28  # how far to move the origin each fold
 
 
 def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -56,7 +56,9 @@ def _add_baseline_features(ts: pd.DataFrame) -> pd.DataFrame:
     return ts
 
 
-def rolling_origin_backtest(df: pd.DataFrame, label_col: str, cfg: BacktestConfig) -> pd.DataFrame:
+def rolling_origin_backtest(
+    df: pd.DataFrame, label_col: str, cfg: BacktestConfig
+) -> pd.DataFrame:
     """
     Rolling-origin evaluation:
     - choose multiple cutoffs ("origins") in time
@@ -117,10 +119,18 @@ def rolling_origin_backtest(df: pd.DataFrame, label_col: str, cfg: BacktestConfi
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Time-aware rolling-origin backtest for baseline forecasters.")
-    parser.add_argument("--in_path", type=str, default="data/processed/m5_labeled_sample.parquet")
-    parser.add_argument("--out_path", type=str, default="reports/baseline_backtest_results.csv")
-    parser.add_argument("--label", type=str, choices=["y_v0", "y_v1", "y_v2", "all"], default="all")
+    parser = argparse.ArgumentParser(
+        description="Time-aware rolling-origin backtest for baseline forecasters."
+    )
+    parser.add_argument(
+        "--in_path", type=str, default="data/processed/m5_labeled_sample.parquet"
+    )
+    parser.add_argument(
+        "--out_path", type=str, default="reports/baseline_backtest_results.csv"
+    )
+    parser.add_argument(
+        "--label", type=str, choices=["y_v0", "y_v1", "y_v2", "all"], default="all"
+    )
     parser.add_argument("--horizon", type=int, default=28)
     parser.add_argument("--min_train_days", type=int, default=365)
     parser.add_argument("--step", type=int, default=28)
@@ -138,7 +148,9 @@ def main() -> None:
 
     df = pd.read_parquet(in_path)
 
-    cfg = BacktestConfig(horizon=args.horizon, min_train_days=args.min_train_days, step=args.step)
+    cfg = BacktestConfig(
+        horizon=args.horizon, min_train_days=args.min_train_days, step=args.step
+    )
 
     labels = ["y_v0", "y_v1", "y_v2"] if args.label == "all" else [args.label]
 
@@ -155,8 +167,8 @@ def main() -> None:
     print("\nSummary (mean over folds):")
     summary = (
         out.groupby(["label", "model"], as_index=False)[["mae", "smape", "n_obs"]]
-           .mean()
-           .sort_values(["label", "mae"])
+        .mean()
+        .sort_values(["label", "mae"])
     )
     print(summary.to_string(index=False))
 

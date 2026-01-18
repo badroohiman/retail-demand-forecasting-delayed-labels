@@ -15,15 +15,36 @@ def time_split(df: pd.DataFrame, split_date: str):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train LightGBM on time-series features.")
-    parser.add_argument("--in_path", type=str, default="data/processed/m5_features_sample.parquet")
+    parser = argparse.ArgumentParser(
+        description="Train LightGBM on time-series features."
+    )
+    parser.add_argument(
+        "--in_path", type=str, default="data/processed/m5_features_sample.parquet"
+    )
     parser.add_argument("--label", type=str, default="y_v2")
     parser.add_argument("--split_date", type=str, default="2015-01-01")
     args = parser.parse_args()
 
     df = pd.read_parquet(args.in_path)
     df["date"] = pd.to_datetime(df["date"])
+    cat_cols = [
+        "d",
+        "item_id",
+        "dept_id",
+        "cat_id",
+        "store_id",
+        "state_id",
+        "event_name_1",
+        "event_type_1",
+        "event_name_2",
+        "event_type_2",
+    ]
 
+    # keep only columns that exist
+    cat_cols = [c for c in cat_cols if c in df.columns]
+
+    for c in cat_cols:
+        df[c] = df[c].astype("category")
     train, test = time_split(df, args.split_date)
 
     target = args.label
@@ -43,7 +64,12 @@ def main() -> None:
         random_state=42,
     )
 
-    model.fit(X_train, y_train)
+    model.fit(
+    X_train,
+    y_train,
+    categorical_feature=cat_cols
+)
+
 
     preds = model.predict(X_test)
     preds = np.clip(preds, 0, None)

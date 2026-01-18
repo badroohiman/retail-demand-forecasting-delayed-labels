@@ -1,7 +1,5 @@
 import argparse
 from pathlib import Path
-
-import numpy as np
 import pandas as pd
 
 
@@ -33,7 +31,9 @@ def add_price_features(df: pd.DataFrame) -> pd.DataFrame:
     g = out.groupby(["store_id", "item_id"], sort=False)
 
     out["price_lag_7"] = g["sell_price"].shift(7)
-    out["price_change_7"] = (out["sell_price"] - out["price_lag_7"]) / out["price_lag_7"]
+    out["price_change_7"] = (out["sell_price"] - out["price_lag_7"]) / out[
+        "price_lag_7"
+    ]
 
     return out
 
@@ -48,10 +48,18 @@ def build_features(df: pd.DataFrame, target: str) -> pd.DataFrame:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build time-safe features for LightGBM.")
-    parser.add_argument("--in_path", type=str, default="data/processed/m5_labeled_sample.parquet")
-    parser.add_argument("--out_path", type=str, default="data/processed/m5_features_sample.parquet")
-    parser.add_argument("--label", type=str, default="y_v2", help="Target label to build lags from")
+    parser = argparse.ArgumentParser(
+        description="Build time-safe features for LightGBM."
+    )
+    parser.add_argument(
+        "--in_path", type=str, default="data/processed/m5_labeled_sample.parquet"
+    )
+    parser.add_argument(
+        "--out_path", type=str, default="data/processed/m5_features_sample.parquet"
+    )
+    parser.add_argument(
+        "--label", type=str, default="y_v2", help="Target label to build lags from"
+    )
     args = parser.parse_args()
 
     in_path = Path(args.in_path)
@@ -63,7 +71,9 @@ def main() -> None:
     df_feat = build_features(df, target=args.label)
 
     # Drop rows where features are not available yet
-    feature_cols = [c for c in df_feat.columns if c.startswith(("lag_", "roll_", "price_"))]
+    feature_cols = [
+        c for c in df_feat.columns if c.startswith(("lag_", "roll_", "price_"))
+    ]
     df_feat = df_feat.dropna(subset=feature_cols)
 
     Path(args.out_path).parent.mkdir(parents=True, exist_ok=True)
