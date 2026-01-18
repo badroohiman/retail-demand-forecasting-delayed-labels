@@ -27,7 +27,17 @@ Rather than treating forecasting as a static supervised learning problem, the pr
 - A global Poisson LightGBM model performed comparably but did not outperform the rolling baseline on MAE.
 - A two-stage intermittent-demand model (P(y>0) × E[y|y>0]) achieved marginal improvements after minimal tuning.
 - Results confirm that **evaluation design and data realism matter more than model complexity**.
+## What makes this project different
 
+Most demand forecasting examples assume immediate and final ground truth.
+This project explicitly models **label latency and revision**, a common but under-documented
+challenge in real production systems.
+
+Key differentiators:
+- Explicit simulation of delayed and revised labels (v0 / v1 / v2)
+- Time-aware backtesting with no leakage
+- Honest comparison against strong statistical baselines
+- Focus on decision-making under realistic constraints, not leaderboard optimization
 
 ## Dataset
 
@@ -66,29 +76,6 @@ Rather than treating forecasting as a static supervised learning problem, the pr
 ├── .gitignore
 └── README.md
 
-## What makes this project different
-
-Most demand forecasting examples assume immediate and final ground truth.
-This project explicitly models **label latency and revision**, a common but under-documented
-challenge in real production systems.
-
-Key differentiators:
-- Explicit simulation of delayed and revised labels (v0 / v1 / v2)
-- Time-aware backtesting with no leakage
-- Honest comparison against strong statistical baselines
-- Focus on decision-making under realistic constraints, not leaderboard optimization
-
-## What makes this project different
-
-Most demand forecasting examples assume immediate and final ground truth.
-This project explicitly models **label latency and revision**, a common but under-documented
-challenge in real production systems.
-
-Key differentiators:
-- Explicit simulation of delayed and revised labels (v0 / v1 / v2)
-- Time-aware backtesting with no leakage
-- Honest comparison against strong statistical baselines
-- Focus on decision-making under realistic constraints, not leaderboard optimization
 
 ## Exploratory Data Analysis (EDA)
 
