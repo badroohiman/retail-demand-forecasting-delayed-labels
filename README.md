@@ -20,6 +20,14 @@ Rather than treating forecasting as a static supervised learning problem, the pr
 * Compare baselines and ML models under realistic constraints
 
 ---
+## Key results (TL;DR)
+
+- Demand is highly intermittent (~60% zero-sales days).
+- Strong statistical baselines (28-day rolling mean) are extremely competitive.
+- A global Poisson LightGBM model performed comparably but did not outperform the rolling baseline on MAE.
+- A two-stage intermittent-demand model (P(y>0) × E[y|y>0]) achieved marginal improvements after minimal tuning.
+- Results confirm that **evaluation design and data realism matter more than model complexity**.
+
 
 ## Dataset
 
@@ -38,8 +46,6 @@ Rather than treating forecasting as a static supervised learning problem, the pr
 ---
 
 ## Repository structure
-
-```
 .
 ├── src/
 │   └── data/
@@ -59,9 +65,30 @@ Rather than treating forecasting as a static supervised learning problem, the pr
 ├── requirements.txt
 ├── .gitignore
 └── README.md
-```
 
----
+## What makes this project different
+
+Most demand forecasting examples assume immediate and final ground truth.
+This project explicitly models **label latency and revision**, a common but under-documented
+challenge in real production systems.
+
+Key differentiators:
+- Explicit simulation of delayed and revised labels (v0 / v1 / v2)
+- Time-aware backtesting with no leakage
+- Honest comparison against strong statistical baselines
+- Focus on decision-making under realistic constraints, not leaderboard optimization
+
+## What makes this project different
+
+Most demand forecasting examples assume immediate and final ground truth.
+This project explicitly models **label latency and revision**, a common but under-documented
+challenge in real production systems.
+
+Key differentiators:
+- Explicit simulation of delayed and revised labels (v0 / v1 / v2)
+- Time-aware backtesting with no leakage
+- Honest comparison against strong statistical baselines
+- Focus on decision-making under realistic constraints, not leaderboard optimization
 
 ## Exploratory Data Analysis (EDA)
 
@@ -172,3 +199,124 @@ Results were compared across delayed label maturities (`y_v0`, `y_v1`, `y_v2`).
 
 ### Conclusion
 These baselines establish a strong, interpretable benchmark and highlight the trade-offs between accuracy and sparsity-aware evaluation.
+
+Great README 👍 — it’s already **very strong**.
+What you’re missing is a **clear, honest “Modeling” section** that:
+
+* explains *what* you modeled
+* explains *why* (based on EDA + baselines)
+* explains *why the result is acceptable*, even if ML doesn’t win
+
+## 📐 Modeling
+
+**Summary**
+
+A global LightGBM model (Poisson objective) and a two-stage intermittent-demand model were evaluated under strict time-based splits. Neither substantially outperformed a well-calibrated rolling-mean baseline on MAE, highlighting the competitiveness of statistical methods in sparse retail demand.
+
+### Modeling strategy
+
+Modeling was approached **after** establishing strong statistical baselines and a robust time-aware evaluation framework.
+
+Given the observed characteristics of the data:
+
+* strong zero-inflation
+* intermittent, bursty demand
+* weak short-term autocorrelation
+* delayed and revised labels
+
+the goal of modeling was **not to maximize accuracy at all costs**, but to assess whether a **global machine learning model** could meaningfully outperform well-calibrated statistical baselines under realistic constraints.
+
+---
+
+### Feature engineering
+
+Features were constructed to be **time-safe**, meaning that all inputs for a given prediction date were available strictly **before** that date.
+
+The feature set includes:
+
+* **Lag features**
+
+  * `lag_1`, `lag_7`, `lag_14`, `lag_28`
+* **Rolling statistics**
+
+  * rolling mean (7, 28 days)
+  * rolling standard deviation (28 days)
+* **Calendar features**
+
+  * day of week
+  * week of year
+  * month
+* **Price features**
+
+  * current sell price
+  * 7-day relative price change
+* **Categorical identifiers**
+
+  * item, department, category, store, state
+  * event name and event type (handled natively by the model)
+
+No target leakage or forward-looking aggregation is used.
+
+---
+
+### Machine learning model
+
+A **global LightGBM model** was trained using a **Poisson objective**, which is appropriate for non-negative count data and commonly used in demand forecasting.
+
+Key modeling choices:
+
+* single global model across all items
+* native handling of categorical features (no one-hot encoding)
+* strict time-based train/test split
+* evaluation against the same horizon and metrics as the baselines
+
+The model was trained on final labels (`y_v2`) and evaluated using MAE and sMAPE.
+
+---
+
+### Results and comparison
+
+On final labels (`y_v2`):
+
+* **LightGBM (Poisson)** achieved MAE ≈ **1.13**
+* **Rolling mean (28-day)** baseline achieved MAE ≈ **1.10**
+
+The machine learning model performed **comparably but did not outperform** the strongest statistical baseline on MAE.
+
+---
+
+### Interpretation
+
+This result is **expected and informative** in the context of intermittent retail demand:
+
+* Rolling averages are highly competitive in sparse demand regimes.
+* MAE favors conservative predictors that avoid over-predicting on zero-sales days.
+* A single global model may struggle to outperform item-level statistical heuristics without more specialized structure.
+
+Rather than indicating modeling failure, this outcome highlights:
+
+* the strength of well-chosen baselines
+* the importance of honest evaluation
+* the limits of generic ML models in zero-inflated demand settings
+
+
+
+### Modeling takeaways
+
+* Machine learning should be **justified**, not assumed to be superior.
+* Strong statistical baselines are essential reference points.
+* Evaluation design matters more than model complexity.
+* Label maturity and data availability materially affect measured performance.
+
+### Minimal hyperparameter tuning
+
+A bounded 6-run tuning experiment was conducted on the two-stage model,
+varying only high-impact LightGBM parameters (`num_leaves`, `min_child_samples`)
+under a fixed time-based split.
+
+The best configuration slightly improved MAE (≈1% relative gain) by increasing
+capacity in the regression stage, indicating that performance is primarily
+limited by modeling the magnitude of non-zero demand rather than occurrence.
+
+Further tuning was intentionally stopped to avoid overfitting the evaluation split
+and to preserve the interpretability and credibility of the results.
