@@ -22,9 +22,15 @@ def time_split(df: pd.DataFrame, split_date: str):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Two-stage model: P(y>0) classifier + E[y|y>0] regressor.")
-    parser.add_argument("--in_path", type=str, default="data/processed/m5_features_sample.parquet")
-    parser.add_argument("--label", type=str, default="y_v2", choices=["y_v0", "y_v1", "y_v2"])
+    parser = argparse.ArgumentParser(
+        description="Two-stage model: P(y>0) classifier + E[y|y>0] regressor."
+    )
+    parser.add_argument(
+        "--in_path", type=str, default="data/processed/m5_features_sample.parquet"
+    )
+    parser.add_argument(
+        "--label", type=str, default="y_v2", choices=["y_v0", "y_v1", "y_v2"]
+    )
     parser.add_argument("--split_date", type=str, default="2015-01-01")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -34,8 +40,16 @@ def main() -> None:
 
     # Categorical columns
     cat_cols = [
-        "d", "item_id", "dept_id", "cat_id", "store_id", "state_id",
-        "event_name_1", "event_type_1", "event_name_2", "event_type_2"
+        "d",
+        "item_id",
+        "dept_id",
+        "cat_id",
+        "store_id",
+        "state_id",
+        "event_name_1",
+        "event_type_1",
+        "event_name_2",
+        "event_type_2",
     ]
     cat_cols = [c for c in cat_cols if c in df.columns]
     for c in cat_cols:
@@ -74,7 +88,9 @@ def main() -> None:
     # ---- Stage 2: regressor on non-zero rows only ----
     nz_mask = y_train > 0
     if nz_mask.sum() == 0:
-        raise ValueError("No non-zero sales in training data; cannot train stage-2 regressor.")
+        raise ValueError(
+            "No non-zero sales in training data; cannot train stage-2 regressor."
+        )
 
     X_train_nz = X_train.loc[nz_mask]
     y_train_nz = y_train[nz_mask]
@@ -106,7 +122,9 @@ def main() -> None:
     Path("models").mkdir(exist_ok=True)
     clf.booster_.save_model("models/lgbm_two_stage_clf.txt")
     reg.booster_.save_model("models/lgbm_two_stage_reg.txt")
-    print("[OK] Saved models to models/lgbm_two_stage_clf.txt and models/lgbm_two_stage_reg.txt")
+    print(
+        "[OK] Saved models to models/lgbm_two_stage_clf.txt and models/lgbm_two_stage_reg.txt"
+    )
 
 
 if __name__ == "__main__":

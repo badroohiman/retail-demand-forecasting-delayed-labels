@@ -64,12 +64,7 @@ def main() -> None:
         random_state=42,
     )
 
-    model.fit(
-    X_train,
-    y_train,
-    categorical_feature=cat_cols
-)
-
+    model.fit(X_train, y_train, categorical_feature=cat_cols)
 
     preds = model.predict(X_test)
     preds = np.clip(preds, 0, None)

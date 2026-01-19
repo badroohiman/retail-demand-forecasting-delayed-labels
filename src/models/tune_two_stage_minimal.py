@@ -33,8 +33,16 @@ def run_two_stage(
 
     # Categoricals
     cat_cols = [
-        "d", "item_id", "dept_id", "cat_id", "store_id", "state_id",
-        "event_name_1", "event_type_1", "event_name_2", "event_type_2",
+        "d",
+        "item_id",
+        "dept_id",
+        "cat_id",
+        "store_id",
+        "state_id",
+        "event_name_1",
+        "event_type_1",
+        "event_name_2",
+        "event_type_2",
     ]
     cat_cols = [c for c in cat_cols if c in df.columns]
     for c in cat_cols:
@@ -74,10 +82,18 @@ def run_two_stage(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Minimal tuning experiment for two-stage model.")
-    parser.add_argument("--in_path", type=str, default="data/processed/m5_features_sample.parquet")
-    parser.add_argument("--out_path", type=str, default="reports/tuning_two_stage_minimal.csv")
-    parser.add_argument("--label", type=str, default="y_v2", choices=["y_v0", "y_v1", "y_v2"])
+    parser = argparse.ArgumentParser(
+        description="Minimal tuning experiment for two-stage model."
+    )
+    parser.add_argument(
+        "--in_path", type=str, default="data/processed/m5_features_sample.parquet"
+    )
+    parser.add_argument(
+        "--out_path", type=str, default="reports/tuning_two_stage_minimal.csv"
+    )
+    parser.add_argument(
+        "--label", type=str, default="y_v2", choices=["y_v0", "y_v1", "y_v2"]
+    )
     parser.add_argument("--split_date", type=str, default="2015-01-01")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -115,15 +131,31 @@ def main():
     # Classifier tuning (keep reg fixed)
     experiments += [
         ("clf_A_base", clf_base, reg_base),
-        ("clf_B_more_reg", {**clf_base, "min_child_samples": 150, "num_leaves": 63}, reg_base),
-        ("clf_C_more_cap", {**clf_base, "min_child_samples": 50, "num_leaves": 127}, reg_base),
+        (
+            "clf_B_more_reg",
+            {**clf_base, "min_child_samples": 150, "num_leaves": 63},
+            reg_base,
+        ),
+        (
+            "clf_C_more_cap",
+            {**clf_base, "min_child_samples": 50, "num_leaves": 127},
+            reg_base,
+        ),
     ]
 
     # Regressor tuning (keep best/standard clf fixed; start from base)
     experiments += [
         ("reg_A_base", clf_base, reg_base),
-        ("reg_B_more_reg", clf_base, {**reg_base, "min_child_samples": 150, "num_leaves": 63}),
-        ("reg_C_more_cap", clf_base, {**reg_base, "min_child_samples": 50, "num_leaves": 127}),
+        (
+            "reg_B_more_reg",
+            clf_base,
+            {**reg_base, "min_child_samples": 150, "num_leaves": 63},
+        ),
+        (
+            "reg_C_more_cap",
+            clf_base,
+            {**reg_base, "min_child_samples": 50, "num_leaves": 127},
+        ),
     ]
 
     rows = []
