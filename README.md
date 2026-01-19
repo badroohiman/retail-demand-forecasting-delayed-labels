@@ -28,6 +28,14 @@ Rather than treating forecasting as a static supervised learning problem, the pr
 - A global Poisson LightGBM model performed comparably but did not outperform the rolling baseline on MAE.
 - A two-stage intermittent-demand model (P(y>0) × E[y|y>0]) achieved marginal improvements after minimal tuning.
 - Results confirm that **evaluation design and data realism matter more than model complexity**.
+
+## For quick reviewers
+
+If you are short on time, the key sections are:
+- Overview
+- Key results (TL;DR)
+- Modeling (Summary + Results and comparison)
+
 ## What makes this project different
 
 Most demand forecasting examples assume immediate and final ground truth.
