@@ -22,6 +22,7 @@ Rather than treating forecasting as a static supervised learning problem, the pr
 ---
 ## Key results (TL;DR)
 
+
 - Demand is highly intermittent (~60% zero-sales days).
 - Strong statistical baselines (28-day rolling mean) are extremely competitive.
 - A global Poisson LightGBM model performed comparably but did not outperform the rolling baseline on MAE.
