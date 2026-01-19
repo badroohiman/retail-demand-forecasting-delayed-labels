@@ -193,16 +193,6 @@ Results were compared across delayed label maturities (`y_v0`, `y_v1`, `y_v2`).
 - Relative error metrics (sMAPE) strongly penalize non-zero predictions when true demand is zero, favoring sparse predictors.
 - Metric choice materially affects model ranking in zero-inflated demand settings.
 
-### Conclusion
-These baselines establish a strong, interpretable benchmark and highlight the trade-offs between accuracy and sparsity-aware evaluation.
-
-Great README 👍 — it’s already **very strong**.
-What you’re missing is a **clear, honest “Modeling” section** that:
-
-* explains *what* you modeled
-* explains *why* (based on EDA + baselines)
-* explains *why the result is acceptable*, even if ML doesn’t win
-
 ## 📐 Modeling
 
 **Summary**
