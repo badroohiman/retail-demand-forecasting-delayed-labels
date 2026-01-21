@@ -247,6 +247,7 @@ kaggle.json
 !src/data/
 !src/data/**/
 !src/data/**/*.py
+<<<<<<< HEAD
 .env
 *.pem
 aws/
@@ -257,3 +258,13 @@ artifacts/
 __pycache__/
 *.pyc
 
+=======
+
+# ignore everything in artifacts
+artifacts/**
+
+# but keep the folder structure
+!artifacts/
+!artifacts/models/
+!artifacts/models/**/*.txt
+>>>>>>> 5d10d58 (Clean README and stop tracking model artifacts)
