@@ -247,3 +247,13 @@ kaggle.json
 !src/data/
 !src/data/**/
 !src/data/**/*.py
+.env
+*.pem
+aws/
+awscliv2.zip
+/data/
+artifacts/
+.venv/
+__pycache__/
+*.pyc
+

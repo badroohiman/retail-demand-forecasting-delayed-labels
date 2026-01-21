@@ -50,7 +50,7 @@ def run_two_stage(
 
     train, test = time_split(df, split_date)
 
-    drop_cols = ["date", "sales", "y_v0", "y_v1", "y_v2"]
+    drop_cols = ["id","date", "sales", "y_v0", "y_v1", "y_v2"]
     features = [c for c in df.columns if c not in drop_cols]
 
     X_train = train[features]
