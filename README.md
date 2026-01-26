@@ -306,3 +306,6 @@ limited by modeling the magnitude of non-zero demand rather than occurrence.
 
 Further tuning was intentionally stopped to avoid overfitting the evaluation split
 and to preserve the interpretability and credibility of the results.
+
+👤 Author
+Iman Badrooh Data Scientist / Machine Learning Engineer (UK)
