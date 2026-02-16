@@ -1,5 +1,7 @@
 import argparse
 from pathlib import Path
+
+import numpy as np
 import pandas as pd
 
 
@@ -38,11 +40,41 @@ def add_price_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def add_availability_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add data-availability features from EDA: in-catalog flag and days since
+    first price. Helps separate structural zeros (product not yet introduced)
+    from demand zeros (in catalog but no sale). Required for availability-aware
+    backtesting and evaluation.
+    """
+    out = df.copy()
+    # Binary: 1 if product was in catalog (had a price) on this date, 0 otherwise
+    out["in_catalog"] = out["sell_price"].notna().astype(np.int8)
+
+    # First date per (store_id, item_id) where sell_price is non-null (product introduction)
+    first_price_date = (
+        out[out["sell_price"].notna()]
+        .groupby(["store_id", "item_id"], sort=False)["date"]
+        .min()
+        .reset_index(name="first_price_date")
+    )
+    out = out.merge(
+        first_price_date, on=["store_id", "item_id"], how="left"
+    )
+    # Days since introduction; clip at 0 so pre-introduction is 0 (no negative days)
+    delta = (out["date"] - out["first_price_date"]).dt.days
+    out["days_since_first_price"] = delta.clip(lower=0).fillna(0).astype(np.int32)
+    out = out.drop(columns=["first_price_date"])
+
+    return out
+
+
 def build_features(df: pd.DataFrame, target: str) -> pd.DataFrame:
     out = df.copy()
     out = add_time_features(out)
     out = add_lag_features(out, target)
     out = add_price_features(out)
+    out = add_availability_features(out)
 
     return out
 
