@@ -3,6 +3,7 @@ Tune two-stage model under rolling-origin backtesting (same protocol as tune_lgb
 Focus: decision rule (soft vs hard gating), not tree capacity.
 Compares (1) soft p*μ, (2) soft_gated p_adj*μ with threshold, (3) hard μ if p≥τ else 0.
 """
+
 import argparse
 from pathlib import Path
 

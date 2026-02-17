@@ -49,11 +49,13 @@ def add_intermittent_features(df: pd.DataFrame, target: str) -> pd.DataFrame:
     out = df.copy()
     g = out.groupby(["store_id", "item_id"], sort=False)
 
-    out["non_zero_rate_7"] = g[target].shift(1).transform(
-        lambda s: s.gt(0).rolling(7, min_periods=1).mean()
+    out["non_zero_rate_7"] = (
+        g[target].shift(1).transform(lambda s: s.gt(0).rolling(7, min_periods=1).mean())
     )
-    out["non_zero_rate_28"] = g[target].shift(1).transform(
-        lambda s: s.gt(0).rolling(28, min_periods=1).mean()
+    out["non_zero_rate_28"] = (
+        g[target]
+        .shift(1)
+        .transform(lambda s: s.gt(0).rolling(28, min_periods=1).mean())
     )
 
     def _days_since_last(grp: pd.DataFrame) -> np.ndarray:
@@ -70,7 +72,10 @@ def add_intermittent_features(df: pd.DataFrame, target: str) -> pd.DataFrame:
 
     out["days_since_last_sale"] = out.groupby(
         ["store_id", "item_id"], sort=False, group_keys=False
-    ).apply(lambda grp: pd.Series(_days_since_last(grp), index=grp.index), include_groups=False)
+    ).apply(
+        lambda grp: pd.Series(_days_since_last(grp), index=grp.index),
+        include_groups=False,
+    )
 
     return out
 
@@ -93,9 +98,7 @@ def add_availability_features(df: pd.DataFrame) -> pd.DataFrame:
         .min()
         .reset_index(name="first_price_date")
     )
-    out = out.merge(
-        first_price_date, on=["store_id", "item_id"], how="left"
-    )
+    out = out.merge(first_price_date, on=["store_id", "item_id"], how="left")
     # Days since introduction; clip at 0 so pre-introduction is 0 (no negative days)
     delta = (out["date"] - out["first_price_date"]).dt.days
     out["days_since_first_price"] = delta.clip(lower=0).fillna(0).astype(np.int32)

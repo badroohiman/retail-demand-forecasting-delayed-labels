@@ -6,6 +6,7 @@ Evaluate the best tuned LightGBM by demand type (smooth / intermittent / erratic
 - Classifies each (store_id, item_id) with ADI/CV² (Syntetos–Boylan).
 - Reports MAE and sMAPE by demand_type for both model and baseline, plus improvement.
 """
+
 import argparse
 from pathlib import Path
 
@@ -16,10 +17,19 @@ import pandas as pd
 from src.eval.backtest_baselines import BacktestConfig, mae, smape
 
 
-def _get_cat_cols_and_features(df: pd.DataFrame, drop_cols: list[str]) -> tuple[list[str], list[str]]:
+def _get_cat_cols_and_features(
+    df: pd.DataFrame, drop_cols: list[str]
+) -> tuple[list[str], list[str]]:
     cat_cols = [
-        "item_id", "dept_id", "cat_id", "store_id", "state_id",
-        "event_name_1", "event_type_1", "event_name_2", "event_type_2",
+        "item_id",
+        "dept_id",
+        "cat_id",
+        "store_id",
+        "state_id",
+        "event_name_1",
+        "event_type_1",
+        "event_name_2",
+        "event_type_2",
     ]
     cat_cols = [c for c in cat_cols if c in df.columns]
     features = [c for c in df.columns if c not in drop_cols]
@@ -30,7 +40,9 @@ def _add_roll28(df: pd.DataFrame, label_col: str) -> pd.DataFrame:
     """Add pred_roll28 = mean(y over t-28..t-1) per series."""
     out = df.copy()
     g = out.groupby(["store_id", "item_id"], sort=False, observed=True)[label_col]
-    out["pred_roll28"] = g.shift(1).transform(lambda s: s.rolling(28, min_periods=1).mean())
+    out["pred_roll28"] = g.shift(1).transform(
+        lambda s: s.rolling(28, min_periods=1).mean()
+    )
     return out
 
 
@@ -63,6 +75,7 @@ def _classify_demand_type(adi: float, cv2: float) -> str:
 
 def compute_demand_type_per_series(df: pd.DataFrame, label_col: str) -> pd.DataFrame:
     """One row per (store_id, item_id) with columns ADI, CV2, demand_type."""
+
     def adi_cv2_row(g):
         d = _adi_cv2(g[label_col])
         d["demand_type"] = _classify_demand_type(d["ADI"], d["CV2"])
@@ -128,9 +141,15 @@ def run_eval(
         for i, c in enumerate(cat_cols):
             if c not in X_test.columns:
                 continue
-            levels = pandas_categorical[i] if pandas_categorical and i < len(pandas_categorical) else None
+            levels = (
+                pandas_categorical[i]
+                if pandas_categorical and i < len(pandas_categorical)
+                else None
+            )
             if levels is not None:
-                X_test[c] = pd.Categorical(X_test[c].astype(str), categories=[str(x) for x in levels])
+                X_test[c] = pd.Categorical(
+                    X_test[c].astype(str), categories=[str(x) for x in levels]
+                )
             else:
                 X_test[c] = X_test[c].astype("category")
         # Columns not in cat_cols must not be object/category or LightGBM infers extra categoricals
@@ -141,7 +160,9 @@ def run_eval(
         pred_lgbm = booster.predict(X_test)
         pred_lgbm = np.clip(pred_lgbm, 0, None)
 
-        fold_df = fold_df[["store_id", "item_id", "date", label_col, "pred_roll28"]].copy()
+        fold_df = fold_df[
+            ["store_id", "item_id", "date", label_col, "pred_roll28"]
+        ].copy()
         fold_df = fold_df.rename(columns={label_col: "y_true"})
         fold_df["pred_lgbm"] = pred_lgbm
         fold_df["pred_roll28"] = fold_df["pred_roll28"].astype(float)
@@ -238,13 +259,15 @@ def main() -> None:
         y = g["y_true"].to_numpy()
         p_lgb = g["pred_lgbm"].to_numpy()
         p_r28 = g["pred_roll28"].to_numpy()
-        return pd.Series({
-            "n_obs": len(y),
-            "mae_lgbm": mae(y, p_lgb),
-            "smape_lgbm": smape(y, p_lgb),
-            "mae_roll28": mae(y, p_r28),
-            "smape_roll28": smape(y, p_r28),
-        })
+        return pd.Series(
+            {
+                "n_obs": len(y),
+                "mae_lgbm": mae(y, p_lgb),
+                "smape_lgbm": smape(y, p_lgb),
+                "mae_roll28": mae(y, p_r28),
+                "smape_roll28": smape(y, p_r28),
+            }
+        )
 
     by_type = (
         pred_df.groupby("demand_type", sort=False, observed=True)
