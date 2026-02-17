@@ -1,0 +1,26 @@
+{
+  "stage": "preprocess",
+  "full_run": false,
+  "sample_stores": 1,
+  "sample_items": 200,
+  "rows": 382600,
+  "cols": 17,
+  "date_min": "2011-01-29 00:00:00",
+  "date_max": "2016-04-24 00:00:00",
+  "elapsed_seconds": 23.85293415399974,
+  "max_rss_mb": 1865.4140625,
+  "raw_files": {
+    "calendar_csv": "data/raw/m5/unzipped/calendar.csv",
+    "sell_prices_csv": "data/raw/m5/unzipped/sell_prices.csv",
+    "sales_train_validation_csv": "data/raw/m5/unzipped/sales_train_validation.csv",
+    "sales_train_evaluation_csv": "data/raw/m5/unzipped/sales_train_evaluation.csv"
+  },
+  "raw_file_sizes_bytes": {
+    "calendar_csv": 103469,
+    "sell_prices_csv": 203395785,
+    "sales_train_validation_csv": 120007726,
+    "sales_train_evaluation_csv": 121736518
+  },
+  "output_path": "data/processed/m5_daily_full.parquet",
+  "output_size_bytes": 1369384
+}
