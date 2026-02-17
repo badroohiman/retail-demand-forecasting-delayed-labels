@@ -22,11 +22,10 @@ Rather than treating forecasting as a static supervised learning problem, the pr
 ---
 ## Key results (TL;DR)
 
-
 - Demand is highly intermittent (~60% zero-sales days).
-- Strong statistical baselines (28-day rolling mean) are extremely competitive.
-- A global Poisson LightGBM model performed comparably but did not outperform the rolling baseline on MAE.
-- A two-stage intermittent-demand model (P(y>0) × E[y|y>0]) achieved marginal improvements after minimal tuning.
+- **Tuned LightGBM (L1 objective)** achieves ~7% MAE improvement over a strong 28-day rolling baseline (≈1.016 vs ≈1.10) under rolling-origin backtesting.
+- **Roll28** still wins on **sMAPE** (≈0.99 vs ≈1.24); metric choice materially affects model ranking.
+- Evaluation by demand type shows LGBM improves MAE most on **erratic** and **smooth** series; roll28 remains better on sMAPE across all types.
 - Results confirm that **evaluation design and data realism matter more than model complexity**.
 
 ## For quick reviewers
@@ -65,25 +64,35 @@ Key differentiators:
 ---
 
 ## Repository structure
+
+```
 .
 ├── src/
-│   └── data/
-│       ├── download.py        # Kaggle data download (competition-aware)
-│       └── preprocess.py      # Raw → canonical dataset (sample-aware)
-│
+│   ├── data/
+│   │   ├── download.py           # Kaggle data download
+│   │   └── preprocess.py         # Raw → canonical dataset
+│   ├── labels/
+│   │   └── make_label_versions.py # Delayed labels (y_v0, y_v1, y_v2)
+│   ├── features/
+│   │   └── build_features.py     # Lag, rolling, calendar, availability
+│   ├── models/
+│   │   ├── train_lgbm.py         # Single-split LightGBM
+│   │   ├── tune_lgbm.py          # Rolling-origin CV + hyperparameter grid
+│   │   ├── train_two_stage.py    # Intermittent-demand (P>0 × E[y|y>0])
+│   │   └── tune_two_stage_minimal.py
+│   └── eval/
+│       ├── backtest_baselines.py # Rolling-origin baseline evaluation
+│       └── eval_best_by_demand_type.py  # Model vs baseline by demand type
 ├── notebooks/
-│   └── 01_eda.ipynb           # Decision-driven exploratory data analysis
-│
+│   └── 01_eda.ipynb             # Decision-driven EDA
 ├── data/
-│   ├── raw/                   # Ignored (Kaggle data)
-│   └── processed/             # Ignored (parquet outputs)
-│
-├── reports/
-│   └── figures/               # Generated plots (small artifacts only)
-│
+│   ├── raw/                     # Ignored (Kaggle data)
+│   └── processed/               # Ignored (parquet outputs)
+├── models/                      # Saved models (e.g. lgbm_tuned.txt)
+├── reports/                     # Backtest results, figures, eval_by_demand_type.csv
 ├── requirements.txt
-├── .gitignore
 └── README.md
+```
 
 
 ## Exploratory Data Analysis (EDA)
@@ -122,22 +131,42 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Data preparation
+### Data preparation and pipeline
 
 ```bash
+# 1. Download and preprocess
 python src/data/download.py
 python src/data/preprocess.py --sample_stores 1 --sample_items 200 \
   --out_path data/processed/m5_daily_sample.parquet
+
+# 2. Create delayed label versions
+python src/labels/make_label_versions.py \
+  --in_path data/processed/m5_daily_sample.parquet \
+  --out_path data/processed/m5_labeled_sample.parquet
+
+# 3. Build features
+python src/features/build_features.py \
+  --in_path data/processed/m5_labeled_sample.parquet \
+  --out_path data/processed/m5_features_sample.parquet
+
+# 4. Tune LightGBM (optional)
+python -m src.models.tune_lgbm --results_path reports/tune_lgbm_results.csv
+
+# 5. Evaluate baselines
+python -m src.eval.backtest_baselines --in_path data/processed/m5_labeled_sample.parquet
+
+# 6. Evaluate best model by demand type
+python -m src.eval.eval_best_by_demand_type
 ```
 
 ---
 
 ## Next steps
 
-* Implement **delayed-label variants** (v0 / v1 / v2) to simulate production label availability.
-* Design **time-aware backtesting** across label versions.
-* Establish strong baselines before introducing ML models.
-* Evaluate how label delay impacts model selection and performance.
+* ~~Implement delayed-label variants (v0 / v1 / v2)~~ ✓
+* ~~Design time-aware backtesting across label versions~~ ✓
+* ~~Establish strong baselines and tuned LightGBM~~ ✓
+* Further experimentation: two-stage intermittent model, weighted MAE for M5 scale differences.
 
 ---
 
@@ -197,7 +226,7 @@ Results were compared across delayed label maturities (`y_v0`, `y_v1`, `y_v2`).
 
 **Summary**
 
-A global LightGBM model (Poisson objective) and a two-stage intermittent-demand model were evaluated under strict time-based splits. Neither substantially outperformed a well-calibrated rolling-mean baseline on MAE, highlighting the competitiveness of statistical methods in sparse retail demand.
+A tuned global LightGBM model (L1 objective) outperforms the 28-day rolling-mean baseline on **MAE** under rolling-origin evaluation, while roll28 remains better on **sMAPE**. Evaluation by demand type shows MAE gains are largest on erratic and smooth series. A two-stage intermittent-demand model is also available for comparison.
 
 ### Modeling strategy
 
@@ -220,26 +249,12 @@ Features were constructed to be **time-safe**, meaning that all inputs for a giv
 
 The feature set includes:
 
-* **Lag features**
-
-  * `lag_1`, `lag_7`, `lag_14`, `lag_28`
-* **Rolling statistics**
-
-  * rolling mean (7, 28 days)
-  * rolling standard deviation (28 days)
-* **Calendar features**
-
-  * day of week
-  * week of year
-  * month
-* **Price features**
-
-  * current sell price
-  * 7-day relative price change
-* **Categorical identifiers**
-
-  * item, department, category, store, state
-  * event name and event type (handled natively by the model)
+* **Lag features**: `lag_1`, `lag_7`, `lag_14`, `lag_28`
+* **Rolling statistics**: rolling mean (7, 28 days), rolling std (28 days)
+* **Calendar features**: day of week, week of year, month
+* **Price features**: current sell price, 7-day relative price change
+* **Availability features**: `in_catalog` (product in catalog), `days_since_first_price` (handles structural zeros)
+* **Categorical identifiers**: item, department, category, store, state, event name/type (handled natively)
 
 No target leakage or forward-looking aggregation is used.
 
@@ -247,27 +262,45 @@ No target leakage or forward-looking aggregation is used.
 
 ### Machine learning model
 
-A **global LightGBM model** was trained using a **Poisson objective**, which is appropriate for non-negative count data and commonly used in demand forecasting.
+A **global LightGBM model** is trained with **rolling-origin CV** and hyperparameter tuning. The primary objective is **regression_l1 (MAE)**; **Tweedie** is also explored for zero-inflated data.
 
 Key modeling choices:
 
 * single global model across all items
 * native handling of categorical features (no one-hot encoding)
-* strict time-based train/test split
+* **rolling-origin CV** (horizon=28, step=28, min_train_days=365) with early stopping
+* grid over `num_leaves`, `min_data_in_leaf`, `reg_alpha`, `reg_lambda`, `max_depth`, and objective (L1 vs Tweedie)
+* **sMAPE as tie-breaker** when MAE is (nearly) equal
 * evaluation against the same horizon and metrics as the baselines
 
-The model was trained on final labels (`y_v2`) and evaluated using MAE and sMAPE.
+The model is trained on final labels (`y_v2`) and evaluated using MAE and sMAPE.
 
 ---
 
 ### Results and comparison
 
-On final labels (`y_v2`):
+On final labels (`y_v2`) with rolling-origin evaluation:
 
-* **LightGBM (Poisson)** achieved MAE ≈ **1.13**
-* **Rolling mean (28-day)** baseline achieved MAE ≈ **1.10**
+| Model | MAE | sMAPE |
+|-------|-----|-------|
+| **Tuned LightGBM (L1)** | **1.016** | 1.24 |
+| Rolling mean (28-day) | 1.10 | **0.99** |
 
-The machine learning model performed **comparably but did not outperform** the strongest statistical baseline on MAE.
+* **LightGBM** outperforms roll28 on **MAE**.
+* **Roll28** outperforms LightGBM on **sMAPE** (metric choice drives ranking).
+
+### Evaluation by demand type
+
+Using ADI/CV² classification (Syntetos–Boylan), we break down performance by demand type (smooth / intermittent / erratic / lumpy):
+
+| Demand type | MAE improvement (LGBM vs roll28) | sMAPE |
+|-------------|----------------------------------|-------|
+| Erratic | **+0.28** | roll28 better |
+| Smooth | **+0.19** | roll28 better |
+| Lumpy | +0.13 | roll28 better |
+| Intermittent | +0.10 | roll28 better |
+
+**MAE improvement** is largest on erratic and smooth series; **sMAPE** favors roll28 across all types.
 
 ---
 
@@ -275,15 +308,15 @@ The machine learning model performed **comparably but did not outperform** the s
 
 This result is **expected and informative** in the context of intermittent retail demand:
 
-* Rolling averages are highly competitive in sparse demand regimes.
-* MAE favors conservative predictors that avoid over-predicting on zero-sales days.
-* A single global model may struggle to outperform item-level statistical heuristics without more specialized structure.
+* Tuned LightGBM **does** outperform roll28 on MAE, especially on erratic and smooth demand.
+* sMAPE strongly favors roll28 (sparse, zero-biased predictions).
+* Metric choice drives model ranking; the same models swap rank on MAE vs sMAPE.
 
-Rather than indicating modeling failure, this outcome highlights:
+The outcome highlights:
 
 * the strength of well-chosen baselines
-* the importance of honest evaluation
-* the limits of generic ML models in zero-inflated demand settings
+* the importance of honest evaluation and metric alignment
+* the value of demand-type breakdown to understand where models improve
 
 
 
@@ -294,18 +327,14 @@ Rather than indicating modeling failure, this outcome highlights:
 * Evaluation design matters more than model complexity.
 * Label maturity and data availability materially affect measured performance.
 
-### Minimal hyperparameter tuning
+### Hyperparameter tuning
 
-A bounded 6-run tuning experiment was conducted on the two-stage model,
-varying only high-impact LightGBM parameters (`num_leaves`, `min_child_samples`)
-under a fixed time-based split.
+LightGBM is tuned via rolling-origin CV over a grid of:
 
-The best configuration slightly improved MAE (≈1% relative gain) by increasing
-capacity in the regression stage, indicating that performance is primarily
-limited by modeling the magnitude of non-zero demand rather than occurrence.
+* `num_leaves`, `min_data_in_leaf`, `reg_alpha`, `reg_lambda`, `max_depth`
+* Objective: `regression_l1` and `tweedie` (variance power 1.1, 1.2, 1.3 for zero-inflated data)
 
-Further tuning was intentionally stopped to avoid overfitting the evaluation split
-and to preserve the interpretability and credibility of the results.
+Results are saved to CSV (e.g. `reports/tune_lgbm_results.csv`); the best config (by MAE, sMAPE tie-breaker) is retrained and saved to `models/lgbm_tuned.txt`.
 
 👤 Author
 Iman Badrooh Data Scientist / Machine Learning Engineer (UK)

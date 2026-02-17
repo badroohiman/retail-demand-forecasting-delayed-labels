@@ -29,7 +29,7 @@ def _get_cat_cols_and_features(df: pd.DataFrame, drop_cols: list[str]) -> tuple[
 def _add_roll28(df: pd.DataFrame, label_col: str) -> pd.DataFrame:
     """Add pred_roll28 = mean(y over t-28..t-1) per series."""
     out = df.copy()
-    g = out.groupby(["store_id", "item_id"], sort=False)[label_col]
+    g = out.groupby(["store_id", "item_id"], sort=False, observed=True)[label_col]
     out["pred_roll28"] = g.shift(1).transform(lambda s: s.rolling(28, min_periods=1).mean())
     return out
 
@@ -70,7 +70,7 @@ def compute_demand_type_per_series(df: pd.DataFrame, label_col: str) -> pd.DataF
 
     out = (
         df.sort_values(["store_id", "item_id", "date"])
-        .groupby(["store_id", "item_id"], sort=False)
+        .groupby(["store_id", "item_id"], sort=False, observed=True)
         .apply(adi_cv2_row, include_groups=False)
         .reset_index()
     )
@@ -84,6 +84,7 @@ def run_eval(
     booster: lgb.Booster,
     features: list[str],
     cat_cols: list[str],
+    pandas_categorical: list | None = None,
     max_folds: int = 10,
 ) -> pd.DataFrame:
     """
@@ -122,12 +123,20 @@ def run_eval(
         if len(fold_df) == 0:
             continue
 
-        X_test = fold_df[features]
-        # Booster expects same dtypes; categoricals as category
-        for c in cat_cols:
-            if c in X_test.columns and X_test[c].dtype.name != "category":
-                X_test = X_test.copy()
+        X_test = fold_df[features].copy()
+        # Only the first len(pandas_categorical) columns must be category; rest must not be (object→numeric)
+        for i, c in enumerate(cat_cols):
+            if c not in X_test.columns:
+                continue
+            levels = pandas_categorical[i] if pandas_categorical and i < len(pandas_categorical) else None
+            if levels is not None:
+                X_test[c] = pd.Categorical(X_test[c].astype(str), categories=[str(x) for x in levels])
+            else:
                 X_test[c] = X_test[c].astype("category")
+        # Columns not in cat_cols must not be object/category or LightGBM infers extra categoricals
+        for c in X_test.columns:
+            if c not in cat_cols and X_test[c].dtype.name in ("object", "category"):
+                X_test[c] = pd.Categorical(X_test[c]).codes
 
         pred_lgbm = booster.predict(X_test)
         pred_lgbm = np.clip(pred_lgbm, 0, None)
@@ -183,14 +192,20 @@ def main() -> None:
         if c in df.columns:
             df[c] = df[c].astype("category")
 
-    # Feature order must match the saved model
+    # Feature order and categorical set must match the saved model
     booster = lgb.Booster(model_file=str(model_path))
     model_features = booster.feature_name()
-    if set(model_features) != set(features):
-        # Use model's order; ensure we have same columns
-        features = [f for f in model_features if f in df.columns]
-    else:
-        features = [f for f in model_features if f in df.columns]
+    features = [f for f in model_features if f in df.columns]
+    if len(features) != len(model_features):
+        raise ValueError(
+            f"Model has {len(model_features)} features but only {len(features)} found in data. "
+            "Missing: " + str(set(model_features) - set(df.columns))
+        )
+    # Use model's pandas_categorical so predict() sees same categorical columns as training
+    dump = booster.dump_model()
+    pandas_cat = dump.get("pandas_categorical", [])
+    cat_cols_from_model = [model_features[i] for i in range(len(pandas_cat))]
+    cat_cols = [c for c in cat_cols_from_model if c in df.columns]
 
     cfg = BacktestConfig(
         horizon=args.horizon,
@@ -199,7 +214,14 @@ def main() -> None:
     )
 
     pred_df = run_eval(
-        df, args.label, cfg, booster, features, cat_cols, max_folds=args.max_folds
+        df,
+        args.label,
+        cfg,
+        booster,
+        features,
+        cat_cols,
+        pandas_categorical=dump.get("pandas_categorical"),
+        max_folds=args.max_folds,
     )
 
     # Demand type per series (on full history)
@@ -224,7 +246,11 @@ def main() -> None:
             "smape_roll28": smape(y, p_r28),
         })
 
-    by_type = pred_df.groupby("demand_type", sort=False).apply(metrics_by_type).reset_index()
+    by_type = (
+        pred_df.groupby("demand_type", sort=False, observed=True)
+        .apply(metrics_by_type, include_groups=False)
+        .reset_index()
+    )
     by_type["mae_improvement"] = by_type["mae_roll28"] - by_type["mae_lgbm"]
     by_type["smape_improvement"] = by_type["smape_roll28"] - by_type["smape_lgbm"]
 
