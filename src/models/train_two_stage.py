@@ -32,15 +32,20 @@ def main() -> None:
         "--label", type=str, default="y_v2", choices=["y_v0", "y_v1", "y_v2"]
     )
     parser.add_argument("--split_date", type=str, default="2015-01-01")
+    parser.add_argument(
+        "--p_threshold",
+        type=float,
+        default=None,
+        help="If set, predict 0 when p < threshold; else p*mu. Tuned on val in rolling-origin.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     df = pd.read_parquet(args.in_path)
     df["date"] = pd.to_datetime(df["date"])
 
-    # Categorical columns
+    # Categorical columns (exclude 'd' to avoid too many bins, match tune_lgbm)
     cat_cols = [
-        "d",
         "item_id",
         "dept_id",
         "cat_id",
@@ -58,7 +63,7 @@ def main() -> None:
     train, test = time_split(df, args.split_date)
 
     target = args.label
-    drop_cols = ["date", "sales", "y_v0", "y_v1", "y_v2"]
+    drop_cols = ["date", "sales", "y_v0", "y_v1", "y_v2", "d"]
     features = [c for c in df.columns if c not in drop_cols]
 
     X_train = train[features]
@@ -96,13 +101,15 @@ def main() -> None:
     y_train_nz = y_train[nz_mask]
 
     reg = lgb.LGBMRegressor(
-        objective="poisson",
+        objective="regression_l1",
         n_estimators=800,
         learning_rate=0.05,
-        num_leaves=63,
+        num_leaves=31,
+        min_data_in_leaf=30,
+        reg_alpha=1.0,
+        reg_lambda=0.1,
         subsample=0.8,
         colsample_bytree=0.8,
-        min_child_samples=50,
         random_state=args.seed,
     )
 
@@ -111,8 +118,12 @@ def main() -> None:
     mu_test = reg.predict(X_test)
     mu_test = np.clip(mu_test, 0, None)
 
-    # Final prediction
-    y_pred = p_test * mu_test
+    # Final prediction: apply probability threshold to reduce overprediction on zero-demand days
+    if args.p_threshold is not None:
+        p_adj = np.where(p_test >= args.p_threshold, p_test, 0.0)
+    else:
+        p_adj = p_test
+    y_pred = p_adj * mu_test
 
     print(f"Two-stage results | label={target} | split_date={args.split_date}")
     print("MAE:", mae(y_test, y_pred))

@@ -1,194 +1,133 @@
+"""
+Tune two-stage model under rolling-origin backtesting (same protocol as tune_lgbm).
+Focus: decision rule (soft vs hard gating), not tree capacity.
+Compares (1) soft p*μ, (2) soft_gated p_adj*μ with threshold, (3) hard μ if p≥τ else 0.
+"""
 import argparse
 from pathlib import Path
-import numpy as np
+
 import pandas as pd
-import lightgbm as lgb
+
+from src.eval.backtest_baselines import BacktestConfig
+from src.eval.backtest_two_stage import (
+    _get_cat_cols_and_features,
+    rolling_origin_two_stage,
+)
 
 
-def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    return float(np.mean(np.abs(y_true - y_pred)))
-
-
-def smape(y_true: np.ndarray, y_pred: np.ndarray, eps: float = 1e-8) -> float:
-    denom = np.abs(y_true) + np.abs(y_pred) + eps
-    return float(np.mean(2.0 * np.abs(y_pred - y_true) / denom))
-
-
-def time_split(df: pd.DataFrame, split_date: str):
-    train = df[df["date"] < split_date].copy()
-    test = df[df["date"] >= split_date].copy()
-    return train, test
-
-
-def run_two_stage(
-    df: pd.DataFrame,
-    label: str,
-    split_date: str,
-    clf_params: dict,
-    reg_params: dict,
-    seed: int,
-):
-    df = df.copy()
-    df["date"] = pd.to_datetime(df["date"])
-
-    # Categoricals
-    cat_cols = [
-        "d",
-        "item_id",
-        "dept_id",
-        "cat_id",
-        "store_id",
-        "state_id",
-        "event_name_1",
-        "event_type_1",
-        "event_name_2",
-        "event_type_2",
-    ]
-    cat_cols = [c for c in cat_cols if c in df.columns]
-    for c in cat_cols:
-        df[c] = df[c].astype("category")
-
-    train, test = time_split(df, split_date)
-
-    drop_cols = ["date", "sales", "y_v0", "y_v1", "y_v2"]
-    features = [c for c in df.columns if c not in drop_cols]
-
-    X_train = train[features]
-    y_train = train[label].astype(float).to_numpy()
-
-    X_test = test[features]
-    y_test = test[label].astype(float).to_numpy()
-
-    # Stage 1 classifier
-    y_train_bin = (y_train > 0).astype(int)
-    clf = lgb.LGBMClassifier(**clf_params, random_state=seed)
-    clf.fit(X_train, y_train_bin, categorical_feature=cat_cols)
-    p_test = clf.predict_proba(X_test)[:, 1]
-
-    # Stage 2 regressor (train only on non-zero)
-    nz = y_train > 0
-    if nz.sum() == 0:
-        raise ValueError("No non-zero targets in training set for stage-2 regressor.")
-
-    reg = lgb.LGBMRegressor(**reg_params, random_state=seed)
-    reg.fit(X_train.loc[nz], y_train[nz], categorical_feature=cat_cols)
-    mu_test = np.clip(reg.predict(X_test), 0, None)
-
-    y_pred = p_test * mu_test
-    return {
-        "mae": mae(y_test, y_pred),
-        "smape": smape(y_test, y_pred),
-    }
-
-
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Minimal tuning experiment for two-stage model."
+        description="Two-stage model tuning under rolling-origin backtesting. "
+        "Compares soft vs hard gating with validation-based threshold tuning."
     )
     parser.add_argument(
-        "--in_path", type=str, default="data/processed/m5_features_sample.parquet"
+        "--in_path",
+        type=str,
+        default="data/processed/m5_features_sample.parquet",
     )
     parser.add_argument(
-        "--out_path", type=str, default="reports/tuning_two_stage_minimal.csv"
+        "--out_path",
+        type=str,
+        default="reports/tuning_two_stage_minimal.csv",
     )
     parser.add_argument(
-        "--label", type=str, default="y_v2", choices=["y_v0", "y_v1", "y_v2"]
+        "--label",
+        type=str,
+        default="y_v2",
+        choices=["y_v0", "y_v1", "y_v2"],
     )
-    parser.add_argument("--split_date", type=str, default="2015-01-01")
+    parser.add_argument("--horizon", type=int, default=28)
+    parser.add_argument("--min_train_days", type=int, default=365)
+    parser.add_argument("--step", type=int, default=28)
+    parser.add_argument("--max_folds", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     in_path = Path(args.in_path)
     if not in_path.exists():
-        raise FileNotFoundError(f"Missing input: {in_path}")
+        raise FileNotFoundError(
+            f"Missing input: {in_path}\n"
+            "Run: python src/features/build_features.py (after make_label_versions)"
+        )
 
     df = pd.read_parquet(in_path)
+    df["date"] = pd.to_datetime(df["date"])
 
-    # ---- Baseline-ish parameter defaults (stable, not too complex) ----
-    clf_base = dict(
+    drop_cols = ["date", "sales", "y_v0", "y_v1", "y_v2", "d"]
+    cat_cols, features = _get_cat_cols_and_features(df, drop_cols)
+    for c in cat_cols:
+        df[c] = df[c].astype("category")
+    obj_cols = [c for c in features if df[c].dtype == "object"]
+    for c in obj_cols:
+        df[c] = df[c].astype("category")
+        if c not in cat_cols:
+            cat_cols.append(c)
+
+    cfg = BacktestConfig(
+        horizon=args.horizon,
+        min_train_days=args.min_train_days,
+        step=args.step,
+    )
+
+    # Fixed params (regression_l1, best LGBM-like); focus on decision rule
+    clf_params = dict(
         objective="binary",
-        n_estimators=600,
+        n_estimators=500,
         learning_rate=0.05,
+        num_leaves=63,
         subsample=0.8,
         colsample_bytree=0.8,
-        num_leaves=63,
         min_child_samples=50,
     )
-
-    reg_base = dict(
-        objective="poisson",
-        n_estimators=900,
+    reg_params = dict(
+        objective="regression_l1",
+        n_estimators=800,
         learning_rate=0.05,
+        num_leaves=31,
+        min_data_in_leaf=30,
+        reg_alpha=1.0,
+        reg_lambda=0.1,
         subsample=0.8,
         colsample_bytree=0.8,
-        num_leaves=63,
-        min_child_samples=50,
     )
 
-    # ---- Minimal experiment: 6 runs ----
-    experiments = []
+    p_thresholds = [0.2, 0.3, 0.4, 0.5, 0.6]
 
-    # Classifier tuning (keep reg fixed)
-    experiments += [
-        ("clf_A_base", clf_base, reg_base),
-        (
-            "clf_B_more_reg",
-            {**clf_base, "min_child_samples": 150, "num_leaves": 63},
-            reg_base,
-        ),
-        (
-            "clf_C_more_cap",
-            {**clf_base, "min_child_samples": 50, "num_leaves": 127},
-            reg_base,
-        ),
-    ]
-
-    # Regressor tuning (keep best/standard clf fixed; start from base)
-    experiments += [
-        ("reg_A_base", clf_base, reg_base),
-        (
-            "reg_B_more_reg",
-            clf_base,
-            {**reg_base, "min_child_samples": 150, "num_leaves": 63},
-        ),
-        (
-            "reg_C_more_cap",
-            clf_base,
-            {**reg_base, "min_child_samples": 50, "num_leaves": 127},
-        ),
-    ]
-
+    # Compare soft, soft_gated, hard
     rows = []
-    for name, clf_p, reg_p in experiments:
-        metrics = run_two_stage(
-            df=df,
-            label=args.label,
-            split_date=args.split_date,
-            clf_params=clf_p,
-            reg_params=reg_p,
-            seed=args.seed,
+    for mode in ["soft", "soft_gated", "hard"]:
+        mean_mae, mean_smape = rolling_origin_two_stage(
+            df,
+            args.label,
+            cfg,
+            cat_cols,
+            features,
+            clf_params,
+            reg_params,
+            combination_mode=mode,
+            p_thresholds=p_thresholds if mode != "soft" else None,
+            random_state=args.seed,
+            max_folds=args.max_folds,
         )
-        row = {
-            "exp": name,
-            "label": args.label,
-            "split_date": args.split_date,
-            "clf_num_leaves": clf_p["num_leaves"],
-            "clf_min_child_samples": clf_p["min_child_samples"],
-            "reg_num_leaves": reg_p["num_leaves"],
-            "reg_min_child_samples": reg_p["min_child_samples"],
-            "mae": metrics["mae"],
-            "smape": metrics["smape"],
-        }
-        rows.append(row)
-        print(f"{name}: MAE={row['mae']:.6f} sMAPE={row['smape']:.6f}")
+        rows.append(
+            {
+                "combination_mode": mode,
+                "label": args.label,
+                "mean_mae": mean_mae,
+                "mean_smape": mean_smape,
+                "horizon": args.horizon,
+                "max_folds": args.max_folds,
+            }
+        )
+        print(f"{mode}: MAE={mean_mae:.4f} sMAPE={mean_smape:.4f}")
 
-    out = pd.DataFrame(rows).sort_values("mae")
+    out = pd.DataFrame(rows).sort_values("mean_mae")
     Path(args.out_path).parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(args.out_path, index=False)
 
     print(f"\n[OK] Saved: {args.out_path}")
-    print("\nTop results (sorted by MAE):")
-    print(out.head(10).to_string(index=False))
+    print("\nResults (sorted by MAE):")
+    print(out.to_string(index=False))
 
 
 if __name__ == "__main__":

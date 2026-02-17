@@ -79,9 +79,10 @@ Key differentiators:
 │   │   ├── train_lgbm.py         # Single-split LightGBM
 │   │   ├── tune_lgbm.py          # Rolling-origin CV + hyperparameter grid
 │   │   ├── train_two_stage.py    # Intermittent-demand (P>0 × E[y|y>0])
-│   │   └── tune_two_stage_minimal.py
+│   │   └── tune_two_stage_minimal.py  # Rolling-origin: soft vs hard gating
 │   └── eval/
 │       ├── backtest_baselines.py # Rolling-origin baseline evaluation
+│       ├── backtest_two_stage.py # Rolling-origin two-stage model evaluation
 │       └── eval_best_by_demand_type.py  # Model vs baseline by demand type
 ├── notebooks/
 │   └── 01_eda.ipynb             # Decision-driven EDA
@@ -157,6 +158,12 @@ python -m src.eval.backtest_baselines --in_path data/processed/m5_labeled_sample
 
 # 6. Evaluate best model by demand type
 python -m src.eval.eval_best_by_demand_type
+
+# 7. Two-stage model (rolling-origin backtest)
+python -m src.eval.backtest_two_stage --in_path data/processed/m5_features_sample.parquet
+
+# 8. Compare two-stage decision rules (soft vs hard gating)
+python -m src.models.tune_two_stage_minimal --in_path data/processed/m5_features_sample.parquet
 ```
 
 ---
@@ -166,7 +173,8 @@ python -m src.eval.eval_best_by_demand_type
 * ~~Implement delayed-label variants (v0 / v1 / v2)~~ ✓
 * ~~Design time-aware backtesting across label versions~~ ✓
 * ~~Establish strong baselines and tuned LightGBM~~ ✓
-* Further experimentation: two-stage intermittent model, weighted MAE for M5 scale differences.
+* ~~Two-stage intermittent model with rolling-origin evaluation~~ ✓ (see below)
+* Further experimentation: weighted MAE for M5 scale differences.
 
 ---
 
@@ -226,7 +234,7 @@ Results were compared across delayed label maturities (`y_v0`, `y_v1`, `y_v2`).
 
 **Summary**
 
-A tuned global LightGBM model (L1 objective) outperforms the 28-day rolling-mean baseline on **MAE** under rolling-origin evaluation, while roll28 remains better on **sMAPE**. Evaluation by demand type shows MAE gains are largest on erratic and smooth series. A two-stage intermittent-demand model is also available for comparison.
+A tuned global LightGBM model (L1 objective) outperforms the 28-day rolling-mean baseline on **MAE** under rolling-origin evaluation, while roll28 remains better on **sMAPE**. Evaluation by demand type shows MAE gains are largest on erratic and smooth series. A **two-stage intermittent-demand model** (P(y>0) × E[y|y>0]) is evaluated under the same rolling-origin protocol, with comparison of soft vs hard gating.
 
 ### Modeling strategy
 
@@ -251,6 +259,7 @@ The feature set includes:
 
 * **Lag features**: `lag_1`, `lag_7`, `lag_14`, `lag_28`
 * **Rolling statistics**: rolling mean (7, 28 days), rolling std (28 days)
+* **Intermittent features**: `non_zero_rate_7`, `non_zero_rate_28`, `days_since_last_sale` (for occurrence prediction)
 * **Calendar features**: day of week, week of year, month
 * **Price features**: current sell price, 7-day relative price change
 * **Availability features**: `in_catalog` (product in catalog), `days_since_first_price` (handles structural zeros)
@@ -326,6 +335,22 @@ The outcome highlights:
 * Strong statistical baselines are essential reference points.
 * Evaluation design matters more than model complexity.
 * Label maturity and data availability materially affect measured performance.
+
+### Two-stage intermittent-demand model
+
+A **two-stage model** (P(y>0) classifier × E[y|y>0] regressor) is evaluated under the **same rolling-origin protocol** as the single-stage LightGBM for fair comparison. The stage-2 regressor uses `regression_l1` (MAE-aligned); intermittent features (`non_zero_rate_7/28`, `days_since_last_sale`) support demand-occurrence prediction.
+
+**Decision rules** (tuned on validation per fold):
+
+| Mode | Combination | Description |
+|------|-------------|-------------|
+| **soft** | `p × μ` | Conditional mean (MSE-optimal) |
+| **soft_gated** | `p × μ` when `p ≥ τ` else 0 | Threshold on probability before multiplication |
+| **hard** | `μ` if `p ≥ τ` else 0 | Hard gating: predict magnitude or zero |
+
+Run `tune_two_stage_minimal` to compare soft, soft_gated, and hard under rolling-origin; run `backtest_two_stage --mode {soft,soft_gated,hard}` for a single mode.
+
+---
 
 ### Hyperparameter tuning
 

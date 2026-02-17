@@ -40,6 +40,41 @@ def add_price_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def add_intermittent_features(df: pd.DataFrame, target: str) -> pd.DataFrame:
+    """
+    Add intermittent-demand features: non-zero rate (rolling proportion of
+    non-zero sales) and days since last sale. Helps the classifier predict
+    demand occurrence.
+    """
+    out = df.copy()
+    g = out.groupby(["store_id", "item_id"], sort=False)
+
+    out["non_zero_rate_7"] = g[target].shift(1).transform(
+        lambda s: s.gt(0).rolling(7, min_periods=1).mean()
+    )
+    out["non_zero_rate_28"] = g[target].shift(1).transform(
+        lambda s: s.gt(0).rolling(28, min_periods=1).mean()
+    )
+
+    def _days_since_last(grp: pd.DataFrame) -> np.ndarray:
+        sales = grp[target].values
+        dates = grp["date"].values
+        res = np.full(len(grp), 999, dtype=np.float32)
+        last_sale_date = None
+        for i in range(len(grp)):
+            if last_sale_date is not None:
+                res[i] = (pd.Timestamp(dates[i]) - pd.Timestamp(last_sale_date)).days
+            if sales[i] > 0:
+                last_sale_date = dates[i]
+        return res
+
+    out["days_since_last_sale"] = out.groupby(
+        ["store_id", "item_id"], sort=False, group_keys=False
+    ).apply(lambda grp: pd.Series(_days_since_last(grp), index=grp.index), include_groups=False)
+
+    return out
+
+
 def add_availability_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Add data-availability features from EDA: in-catalog flag and days since
@@ -75,6 +110,7 @@ def build_features(df: pd.DataFrame, target: str) -> pd.DataFrame:
     out = add_lag_features(out, target)
     out = add_price_features(out)
     out = add_availability_features(out)
+    out = add_intermittent_features(out, target)
 
     return out
 
@@ -104,7 +140,9 @@ def main() -> None:
 
     # Drop rows where features are not available yet
     feature_cols = [
-        c for c in df_feat.columns if c.startswith(("lag_", "roll_", "price_"))
+        c
+        for c in df_feat.columns
+        if c.startswith(("lag_", "roll_", "price_", "non_zero_", "days_since"))
     ]
     df_feat = df_feat.dropna(subset=feature_cols)
 
